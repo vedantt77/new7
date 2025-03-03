@@ -56,17 +56,20 @@ export function AdminDashboard() {
       const startups: PendingStartup[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        startups.push({
-          id: doc.id,
-          name: data.name,
-          description: data.description,
-          url: data.url,
-          logoUrl: data.logoUrl,
-          status: data.status,
-          createdAt: data.createdAt.toDate(),
-          scheduledFor: data.scheduledFor.toDate(),
-          userId: data.userId
-        });
+        // Only add if the document has the required fields
+        if (data.name && data.description && data.url && data.logoUrl) {
+          startups.push({
+            id: doc.id,
+            name: data.name,
+            description: data.description,
+            url: data.url,
+            logoUrl: data.logoUrl,
+            status: data.status || 'pending',
+            createdAt: data.createdAt?.toDate() || new Date(),
+            scheduledFor: data.scheduledFor?.toDate() || new Date(),
+            userId: data.userId
+          });
+        }
       });
 
       setPendingStartups(startups);
@@ -74,7 +77,7 @@ export function AdminDashboard() {
       console.error('Error fetching startups:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load pending startups',
+        description: 'Failed to load pending startups. Please try again later.',
         variant: 'destructive',
       });
     } finally {
@@ -112,7 +115,7 @@ export function AdminDashboard() {
       console.error('Error updating startup status:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update startup status',
+        description: 'Failed to update startup status. Please try again.',
         variant: 'destructive',
       });
     }
@@ -140,76 +143,77 @@ export function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {pendingStartups.map((startup) => (
-                <Card key={startup.id} className="p-6">
-                  <div className="flex items-start gap-4">
-                    <img
-                      src={startup.logoUrl}
-                      alt={startup.name}
-                      className="w-16 h-16 rounded-lg object-cover"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold text-lg">{startup.name}</h3>
-                        <Badge
-                          variant={
-                            startup.status === 'approved'
-                              ? 'success'
-                              : startup.status === 'rejected'
-                              ? 'destructive'
-                              : 'secondary'
-                          }
+              {pendingStartups.length > 0 ? (
+                pendingStartups.map((startup) => (
+                  <Card key={startup.id} className="p-6">
+                    <div className="flex items-start gap-4">
+                      <img
+                        src={startup.logoUrl}
+                        alt={startup.name}
+                        className="w-16 h-16 rounded-lg object-cover"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold text-lg">{startup.name}</h3>
+                          <Badge
+                            variant={
+                              startup.status === 'approved'
+                                ? 'success'
+                                : startup.status === 'rejected'
+                                ? 'destructive'
+                                : 'secondary'
+                            }
+                          >
+                            {startup.status}
+                          </Badge>
+                        </div>
+                        <a
+                          href={startup.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
                         >
-                          {startup.status}
-                        </Badge>
-                      </div>
-                      <a
-                        href={startup.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        {startup.url}
-                      </a>
-                      <p className="text-muted-foreground mt-2">
-                        {startup.description}
-                      </p>
-                      <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-                        <span>
-                          Submitted: {startup.createdAt.toLocaleDateString()}
-                        </span>
-                        {startup.scheduledFor && (
+                          {startup.url}
+                        </a>
+                        <p className="text-muted-foreground mt-2">
+                          {startup.description}
+                        </p>
+                        <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
                           <span>
-                            Scheduled for:{' '}
-                            {startup.scheduledFor.toLocaleDateString()}
+                            Submitted: {startup.createdAt.toLocaleDateString()}
                           </span>
+                          {startup.scheduledFor && (
+                            <span>
+                              Scheduled for:{' '}
+                              {startup.scheduledFor.toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        {startup.status === 'pending' && (
+                          <div className="flex gap-2 mt-4">
+                            <Button
+                              onClick={() =>
+                                handleStatusUpdate(startup.id, 'approved')
+                              }
+                              variant="default"
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                handleStatusUpdate(startup.id, 'rejected')
+                              }
+                              variant="destructive"
+                            >
+                              Reject
+                            </Button>
+                          </div>
                         )}
                       </div>
-                      {startup.status === 'pending' && (
-                        <div className="flex gap-2 mt-4">
-                          <Button
-                            onClick={() =>
-                              handleStatusUpdate(startup.id, 'approved')
-                            }
-                            variant="default"
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            onClick={() =>
-                              handleStatusUpdate(startup.id, 'rejected')
-                            }
-                            variant="destructive"
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                </Card>
-              ))}
-              {pendingStartups.length === 0 && (
+                  </Card>
+                ))
+              ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   No pending startups to review
                 </div>
