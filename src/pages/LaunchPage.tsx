@@ -3,6 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LaunchListItem } from '@/components/launch/LaunchListItem';
 import { PremiumListing } from '@/components/launch/PremiumListing';
 import { AnimatedHeader } from '@/components/launch/AnimatedHeader';
+import { getLaunches, getWeeklyLaunches, getQueuedLaunches } from '@/lib/data/launches';
 import { WeeklyCountdownTimer } from '@/components/WeeklyCountdownTimer';
 import { Launch } from '@/lib/types/launch';
 
@@ -12,21 +13,6 @@ interface ListItem extends Launch {
 
 const ROTATION_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
 
-// Mock data for testing
-const mockLaunches: Launch[] = [
-  {
-    id: 'test-1',
-    name: 'Test Launch 1',
-    logo: '/images/eglogo.png',
-    description: 'A test launch description',
-    launchDate: new Date().toISOString(),
-    website: 'https://example.com',
-    category: 'Test',
-    listingType: 'regular'
-  },
-  // Add more mock launches as needed
-];
-
 export function LaunchPage() {
   const [activeTab, setActiveTab] = useState('weekly');
   const [rotatedWeeklyLaunches, setRotatedWeeklyLaunches] = useState<Launch[]>([]);
@@ -34,11 +20,14 @@ export function LaunchPage() {
   const [rotatedBoostedLaunches, setRotatedBoostedLaunches] = useState<Launch[]>([]);
   
   // Memoize these values to prevent unnecessary re-renders
-  const allLaunches = useMemo(() => mockLaunches, []);
+  const allLaunches = useMemo(() => getLaunches(), []);
   const premiumLaunches = useMemo(() => allLaunches.filter(launch => launch.listingType === 'premium'), [allLaunches]);
   const boostedLaunches = useMemo(() => allLaunches.filter(launch => launch.listingType === 'boosted'), [allLaunches]);
   const regularLaunches = useMemo(() => allLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular'), [allLaunches]);
-  const weeklyRegularLaunches = useMemo(() => mockLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular'), []);
+  const weeklyRegularLaunches = useMemo(() => 
+    getWeeklyLaunches().filter(launch => !launch.listingType || launch.listingType === 'regular'),
+    []
+  );
 
   // Function to get current rotation index based on timestamp
   const getCurrentRotationIndex = (listLength: number) => {
@@ -98,34 +87,46 @@ export function LaunchPage() {
 
   // Update rotations based on current time
   useEffect(() => {
-    const updateRotations = () => {
-      const weeklyIndex = getCurrentRotationIndex(weeklyRegularLaunches.length);
-      const regularIndex = getCurrentRotationIndex(regularLaunches.length);
-      const boostedIndex = getCurrentRotationIndex(boostedLaunches.length);
+    const fetchLaunches = async () => {
+      const allLaunches = await getQueuedLaunches();
+      const weeklyLaunches = allLaunches.filter(launch => {
+        const launchDate = new Date(launch.launchDate);
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        return launchDate >= startOfWeek && launchDate <= endOfWeek;
+      });
 
-      setRotatedWeeklyLaunches(rotateArrayByIndex(weeklyRegularLaunches, weeklyIndex));
-      setRotatedRegularLaunches(rotateArrayByIndex(regularLaunches, regularIndex));
-      setRotatedBoostedLaunches(rotateArrayByIndex(boostedLaunches, boostedIndex));
+      const regularLaunches = allLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular');
+      const boostedLaunches = allLaunches.filter(launch => launch.listingType === 'boosted');
+      
+      setRotatedWeeklyLaunches(rotateArrayByIndex(weeklyLaunches, getCurrentRotationIndex(weeklyLaunches.length)));
+      setRotatedRegularLaunches(rotateArrayByIndex(regularLaunches, getCurrentRotationIndex(regularLaunches.length)));
+      setRotatedBoostedLaunches(rotateArrayByIndex(boostedLaunches, getCurrentRotationIndex(boostedLaunches.length)));
     };
 
-    // Initial update
-    updateRotations();
+    // Initial fetch
+    fetchLaunches();
 
-    // Calculate time until next rotation
+    // Set up interval for rotation
     const now = Date.now();
     const nextRotation = Math.ceil(now / ROTATION_INTERVAL) * ROTATION_INTERVAL;
     const timeUntilNextRotation = nextRotation - now;
 
-    // Set timeout for first rotation
     const initialTimeout = setTimeout(() => {
-      updateRotations();
-      // Then set interval for subsequent rotations
-      const interval = setInterval(updateRotations, ROTATION_INTERVAL);
+      fetchLaunches();
+      const interval = setInterval(fetchLaunches, ROTATION_INTERVAL);
       return () => clearInterval(interval);
     }, timeUntilNextRotation);
 
     return () => clearTimeout(initialTimeout);
-  }, [weeklyRegularLaunches, regularLaunches, boostedLaunches]);
+  }, []); // Empty dependency array since we're managing updates internally
 
   return (
     <div className="min-h-screen">
