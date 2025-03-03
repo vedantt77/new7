@@ -3,7 +3,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LaunchListItem } from '@/components/launch/LaunchListItem';
 import { PremiumListing } from '@/components/launch/PremiumListing';
 import { AnimatedHeader } from '@/components/launch/AnimatedHeader';
-import { getLaunches, getWeeklyLaunches } from '@/lib/data/launches';
 import { WeeklyCountdownTimer } from '@/components/WeeklyCountdownTimer';
 import { Launch } from '@/lib/types/launch';
 
@@ -13,6 +12,21 @@ interface ListItem extends Launch {
 
 const ROTATION_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
 
+// Mock data for testing
+const mockLaunches: Launch[] = [
+  {
+    id: 'test-1',
+    name: 'Test Launch 1',
+    logo: '/images/eglogo.png',
+    description: 'A test launch description',
+    launchDate: new Date().toISOString(),
+    website: 'https://example.com',
+    category: 'Test',
+    listingType: 'regular'
+  },
+  // Add more mock launches as needed
+];
+
 export function LaunchPage() {
   const [activeTab, setActiveTab] = useState('weekly');
   const [rotatedWeeklyLaunches, setRotatedWeeklyLaunches] = useState<Launch[]>([]);
@@ -20,14 +34,11 @@ export function LaunchPage() {
   const [rotatedBoostedLaunches, setRotatedBoostedLaunches] = useState<Launch[]>([]);
   
   // Memoize these values to prevent unnecessary re-renders
-  const allLaunches = useMemo(() => getLaunches(), []);
+  const allLaunches = useMemo(() => mockLaunches, []);
   const premiumLaunches = useMemo(() => allLaunches.filter(launch => launch.listingType === 'premium'), [allLaunches]);
   const boostedLaunches = useMemo(() => allLaunches.filter(launch => launch.listingType === 'boosted'), [allLaunches]);
   const regularLaunches = useMemo(() => allLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular'), [allLaunches]);
-  const weeklyRegularLaunches = useMemo(() => 
-    getWeeklyLaunches().filter(launch => !launch.listingType || launch.listingType === 'regular'),
-    []
-  );
+  const weeklyRegularLaunches = useMemo(() => mockLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular'), []);
 
   // Function to get current rotation index based on timestamp
   const getCurrentRotationIndex = (listLength: number) => {
@@ -114,7 +125,7 @@ export function LaunchPage() {
     }, timeUntilNextRotation);
 
     return () => clearTimeout(initialTimeout);
-  }, [weeklyRegularLaunches, regularLaunches, boostedLaunches]); // Include regularLaunches in dependencies
+  }, [weeklyRegularLaunches, regularLaunches, boostedLaunches]);
 
   return (
     <div className="min-h-screen">
