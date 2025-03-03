@@ -1,18 +1,32 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { getLaunches } from '@/lib/data/launches';
 import { Launch } from '@/lib/types/launch';
 import { LaunchListItem } from '@/components/launch/LaunchListItem';
 import { WeeklyCountdownTimer } from '@/components/WeeklyCountdownTimer';
 import confetti from 'canvas-confetti';
+
+// Mock data for testing
+const mockLaunches: Launch[] = [
+  {
+    id: 'test-1',
+    name: 'Test Launch 1',
+    logo: '/images/eglogo.png',
+    description: 'A test launch description',
+    launchDate: new Date().toISOString(),
+    website: 'https://example.com',
+    category: 'Test',
+    listingType: 'regular'
+  },
+  // Add more mock launches as needed
+];
 
 export function SharedLaunchPage() {
   const { id } = useParams<{ id: string }>();
   const [launch, setLaunch] = useState<Launch | null>(null);
 
   useEffect(() => {
-    const launches = getLaunches();
-    const foundLaunch = launches.find(l => l.id === id);
+    // Find launch in mock data
+    const foundLaunch = mockLaunches.find(l => l.id === id);
     setLaunch(foundLaunch || null);
 
     // Update meta tags
