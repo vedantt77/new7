@@ -2,6 +2,7 @@ import { Launch } from '../types/launch';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 
+// Base launches that are always shown
 export const launches: Launch[] = [
   {
     id: 'TouchBase-46',
@@ -511,7 +512,46 @@ export const launches: Launch[] = [
   }
 ];
 
-function getCurrentWeekBounds() {
+// Get all launches including approved and live ones from Firestore
+export async function getAllLaunches(): Promise<Launch[]> {
+  try {
+    const startupsRef = collection(db, 'startups');
+    const q = query(
+      startupsRef,
+      where('status', 'in', ['live', 'approved'])
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const firestoreLaunches: Launch[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.name && data.logoUrl && data.url) {
+        firestoreLaunches.push({
+          id: doc.id,
+          name: data.name,
+          logo: data.logoUrl,
+          description: data.description,
+          launchDate: data.scheduledFor.toDate().toISOString(),
+          website: data.url,
+          category: data.category || 'New',
+          listingType: data.listingType || 'regular',
+          doFollowBacklink: true,
+          status: data.status
+        });
+      }
+    });
+
+    // Combine base launches with Firestore launches
+    return [...launches, ...firestoreLaunches];
+  } catch (error) {
+    console.error('Error fetching launches:', error);
+    return launches;
+  }
+}
+
+// Get current week's launches
+export async function getWeeklyLaunches(): Promise<Launch[]> {
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay());
@@ -520,66 +560,51 @@ function getCurrentWeekBounds() {
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 6);
   endOfWeek.setHours(23, 59, 59, 999);
-  
-  return { startOfWeek, endOfWeek };
-}
 
-export async function getQueuedLaunches(): Promise<Launch[]> {
-  const { startOfWeek, endOfWeek } = getCurrentWeekBounds();
-  
   try {
     const startupsRef = collection(db, 'startups');
     const q = query(
       startupsRef,
-      where('status', '==', 'approved'),
+      where('status', 'in', ['live', 'approved']),
       where('scheduledFor', '>=', Timestamp.fromDate(startOfWeek)),
       where('scheduledFor', '<=', Timestamp.fromDate(endOfWeek))
     );
 
     const querySnapshot = await getDocs(q);
-    const queuedLaunches: Launch[] = [];
+    const weeklyLaunches: Launch[] = [];
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      queuedLaunches.push({
-        id: doc.id,
-        name: data.name,
-        logo: data.logoUrl,
-        description: data.description,
-        launchDate: data.scheduledFor.toDate().toISOString(),
-        website: data.url,
-        category: 'New',
-        listingType: 'regular',
-        doFollowBacklink: true,
-        status: data.status,
-        submittedAt: data.createdAt.toDate().toISOString(),
-        scheduledFor: data.scheduledFor.toDate().toISOString()
-      });
+      if (data.name && data.logoUrl && data.url) {
+        weeklyLaunches.push({
+          id: doc.id,
+          name: data.name,
+          logo: data.logoUrl,
+          description: data.description,
+          launchDate: data.scheduledFor.toDate().toISOString(),
+          website: data.url,
+          category: data.category || 'New',
+          listingType: data.listingType || 'regular',
+          doFollowBacklink: true,
+          status: data.status
+        });
+      }
     });
 
-    return [...launches, ...queuedLaunches];
+    // Filter base launches for current week
+    const baseWeeklyLaunches = launches.filter(launch => {
+      const launchDate = new Date(launch.launchDate);
+      return launchDate >= startOfWeek && launchDate <= endOfWeek;
+    });
+
+    return [...baseWeeklyLaunches, ...weeklyLaunches];
   } catch (error) {
-    console.error('Error fetching queued launches:', error);
-    return launches;
+    console.error('Error fetching weekly launches:', error);
+    
+    // Fallback to static data if Firestore fetch fails
+    return launches.filter(launch => {
+      const launchDate = new Date(launch.launchDate);
+      return launchDate >= startOfWeek && launchDate <= endOfWeek;
+    });
   }
-}
-
-export function getLaunches(): Launch[] {
-  return launches;
-}
-
-export function getWeeklyLaunches(): Launch[] {
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-  
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
-  
-  return launches.filter(launch => {
-    const launchDate = new Date(launch.launchDate);
-    return launchDate >= startOfWeek && launchDate <= endOfWeek;
-  });
 }
