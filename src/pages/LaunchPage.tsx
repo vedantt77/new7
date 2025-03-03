@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LaunchListItem } from '@/components/launch/LaunchListItem';
 import { PremiumListing } from '@/components/launch/PremiumListing';
 import { AnimatedHeader } from '@/components/launch/AnimatedHeader';
-import { getLaunches, getWeeklyLaunches } from '@/lib/data/launches';
+import { getAllLaunches, getWeeklyLaunches } from '@/lib/data/launches';
 import { WeeklyCountdownTimer } from '@/components/WeeklyCountdownTimer';
 import { Launch } from '@/lib/types/launch';
 
@@ -15,18 +15,48 @@ const ROTATION_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 export function LaunchPage() {
   const [activeTab, setActiveTab] = useState('weekly');
+  const [allLaunches, setAllLaunches] = useState<Launch[]>([]);
+  const [weeklyLaunches, setWeeklyLaunches] = useState<Launch[]>([]);
   const [rotatedWeeklyLaunches, setRotatedWeeklyLaunches] = useState<Launch[]>([]);
   const [rotatedRegularLaunches, setRotatedRegularLaunches] = useState<Launch[]>([]);
   const [rotatedBoostedLaunches, setRotatedBoostedLaunches] = useState<Launch[]>([]);
+
+  // Fetch launches on mount and when status changes
+  useEffect(() => {
+    const fetchLaunches = async () => {
+      try {
+        const [all, weekly] = await Promise.all([
+          getAllLaunches(),
+          getWeeklyLaunches()
+        ]);
+        setAllLaunches(all);
+        setWeeklyLaunches(weekly);
+      } catch (error) {
+        console.error('Error fetching launches:', error);
+      }
+    };
+
+    fetchLaunches();
+
+    // Refresh data every minute to catch status changes
+    const interval = setInterval(fetchLaunches, 60000);
+    return () => clearInterval(interval);
+  }, []);
   
-  // Memoize these values to prevent unnecessary re-renders
-  const allLaunches = useMemo(() => getLaunches(), []);
-  const premiumLaunches = useMemo(() => allLaunches.filter(launch => launch.listingType === 'premium'), [allLaunches]);
-  const boostedLaunches = useMemo(() => allLaunches.filter(launch => launch.listingType === 'boosted'), [allLaunches]);
-  const regularLaunches = useMemo(() => allLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular'), [allLaunches]);
-  const weeklyRegularLaunches = useMemo(() => 
-    getWeeklyLaunches().filter(launch => !launch.listingType || launch.listingType === 'regular'),
-    []
+  // Memoize filtered launches
+  const premiumLaunches = useMemo(() => 
+    allLaunches.filter(launch => launch.listingType === 'premium'),
+    [allLaunches]
+  );
+  
+  const boostedLaunches = useMemo(() => 
+    allLaunches.filter(launch => launch.listingType === 'boosted'),
+    [allLaunches]
+  );
+  
+  const regularLaunches = useMemo(() => 
+    allLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular'),
+    [allLaunches]
   );
 
   // Function to get current rotation index based on timestamp
@@ -87,23 +117,18 @@ export function LaunchPage() {
 
   // Update rotations based on current time
   useEffect(() => {
-    const updateLaunches = () => {
-      try {
-        // Use the static data instead of queued launches for now
-        const weeklyLaunches = getWeeklyLaunches();
-        const regularLaunches = getLaunches().filter(launch => !launch.listingType || launch.listingType === 'regular');
-        const boostedLaunches = getLaunches().filter(launch => launch.listingType === 'boosted');
-        
-        setRotatedWeeklyLaunches(rotateArrayByIndex(weeklyLaunches, getCurrentRotationIndex(weeklyLaunches.length)));
-        setRotatedRegularLaunches(rotateArrayByIndex(regularLaunches, getCurrentRotationIndex(regularLaunches.length)));
-        setRotatedBoostedLaunches(rotateArrayByIndex(boostedLaunches, getCurrentRotationIndex(boostedLaunches.length)));
-      } catch (error) {
-        console.error('Error updating launches:', error);
-      }
+    const updateRotations = () => {
+      const weeklyIndex = getCurrentRotationIndex(weeklyLaunches.length);
+      const regularIndex = getCurrentRotationIndex(regularLaunches.length);
+      const boostedIndex = getCurrentRotationIndex(boostedLaunches.length);
+
+      setRotatedWeeklyLaunches(rotateArrayByIndex(weeklyLaunches, weeklyIndex));
+      setRotatedRegularLaunches(rotateArrayByIndex(regularLaunches, regularIndex));
+      setRotatedBoostedLaunches(rotateArrayByIndex(boostedLaunches, boostedIndex));
     };
 
     // Initial update
-    updateLaunches();
+    updateRotations();
 
     // Set up interval for rotation
     const now = Date.now();
@@ -111,13 +136,13 @@ export function LaunchPage() {
     const timeUntilNextRotation = nextRotation - now;
 
     const initialTimeout = setTimeout(() => {
-      updateLaunches();
-      const interval = setInterval(updateLaunches, ROTATION_INTERVAL);
+      updateRotations();
+      const interval = setInterval(updateRotations, ROTATION_INTERVAL);
       return () => clearInterval(interval);
     }, timeUntilNextRotation);
 
     return () => clearTimeout(initialTimeout);
-  }, []); 
+  }, [weeklyLaunches, regularLaunches, boostedLaunches]);
 
   return (
     <div className="min-h-screen">
