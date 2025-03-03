@@ -30,6 +30,7 @@ interface SubmittedStartup {
   logoUrl: string;
   submittedAt: Date;
   status: string;
+  scheduledFor?: Date;
 }
 
 export function ProfilePage() {
@@ -61,7 +62,8 @@ export function ProfilePage() {
             description: data.description,
             logoUrl: data.logoUrl,
             submittedAt: data.createdAt.toDate(),
-            status: data.status
+            status: data.status,
+            scheduledFor: data.scheduledFor?.toDate()
           });
         }
       } catch (error) {
@@ -78,6 +80,15 @@ export function ProfilePage() {
 
     fetchStartupData();
   }, [user, toast]);
+
+  const getNextWeekLaunchDate = () => {
+    const now = new Date();
+    const nextWeekStart = new Date(now);
+    // Get next Sunday (start of next week)
+    nextWeekStart.setDate(now.getDate() + (7 - now.getDay()));
+    nextWeekStart.setHours(0, 0, 0, 0);
+    return nextWeekStart;
+  };
 
   const onSubmit = async (data: StartupFormData) => {
     if (!user) return;
@@ -107,11 +118,8 @@ export function ProfilePage() {
       const uploadResult = await uploadBytes(storageRef, file);
       const logoUrl = await getDownloadURL(uploadResult.ref);
 
-      // Calculate next week's launch date
-      const now = new Date();
-      const nextWeekStart = new Date(now);
-      nextWeekStart.setDate(now.getDate() + (7 - now.getDay()));
-      nextWeekStart.setHours(0, 0, 0, 0);
+      // Get next week's launch date
+      const scheduledFor = getNextWeekLaunchDate();
 
       // Save startup data to Firestore
       const startupRef = doc(db, 'startups', user.uid);
@@ -126,7 +134,7 @@ export function ProfilePage() {
         createdAt: timestamp,
         status: 'pending',
         updatedAt: timestamp,
-        scheduledFor: Timestamp.fromDate(nextWeekStart) // Schedule for next week
+        scheduledFor: Timestamp.fromDate(scheduledFor)
       };
 
       await setDoc(startupRef, startupData);
@@ -135,12 +143,13 @@ export function ProfilePage() {
       setSubmittedStartup({
         ...startupData,
         submittedAt: new Date(),
-        status: 'pending'
+        status: 'pending',
+        scheduledFor
       });
 
       toast({
         title: 'Success!',
-        description: 'Your startup has been submitted for review and will be scheduled for next week\'s launch.',
+        description: `Your startup has been submitted for review and will be scheduled for launch on ${scheduledFor.toLocaleDateString()}.`,
       });
 
       reset();
@@ -223,8 +232,17 @@ export function ProfilePage() {
                 <p className="text-sm text-muted-foreground">
                   Status: <span className="font-medium text-primary capitalize">{submittedStartup.status}</span>
                 </p>
+                {submittedStartup.scheduledFor && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Scheduled for: <span className="font-medium">{submittedStartup.scheduledFor.toLocaleDateString()}</span>
+                  </p>
+                )}
                 <p className="text-sm mt-2">
-                  We'll review your submission and get back to you soon.
+                  {submittedStartup.status === 'pending' 
+                    ? "We'll review your submission and get back to you soon."
+                    : submittedStartup.status === 'approved'
+                    ? "Your startup has been approved and will be featured on the scheduled date."
+                    : "Your submission has been reviewed. Please check your email for more information."}
                 </p>
               </div>
             </CardContent>
