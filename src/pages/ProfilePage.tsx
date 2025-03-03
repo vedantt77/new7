@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { useAuthContext } from '@/providers/AuthProvider';
@@ -20,7 +20,6 @@ interface StartupFormData {
   socialHandle: string;
   description: string;
   logo: FileList;
-  category: string;
 }
 
 interface SubmittedStartup {
@@ -31,17 +30,6 @@ interface SubmittedStartup {
   logoUrl: string;
   submittedAt: Date;
   status: string;
-  category: string;
-  scheduledFor?: string;
-}
-
-// Helper function to get next Sunday's date
-function getNextSundayDate() {
-  const now = new Date();
-  const nextSunday = new Date(now);
-  nextSunday.setDate(now.getDate() + (7 - now.getDay()));
-  nextSunday.setHours(0, 0, 0, 0);
-  return nextSunday;
 }
 
 export function ProfilePage() {
@@ -55,6 +43,7 @@ export function ProfilePage() {
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<StartupFormData>();
 
+  // Fetch startup data when component mounts or user changes
   useEffect(() => {
     async function fetchStartupData() {
       if (!user) return;
@@ -72,9 +61,7 @@ export function ProfilePage() {
             description: data.description,
             logoUrl: data.logoUrl,
             submittedAt: data.createdAt.toDate(),
-            status: data.status,
-            category: data.category,
-            scheduledFor: data.scheduledFor
+            status: data.status
           });
         }
       } catch (error) {
@@ -97,6 +84,7 @@ export function ProfilePage() {
     
     setIsSubmitting(true);
     try {
+      // Validate file size and type
       const file = data.logo[0];
       if (!file) {
         throw new Error('Please select a logo file');
@@ -110,16 +98,22 @@ export function ProfilePage() {
         throw new Error('Logo must be an image file');
       }
 
+      // Create a unique filename
       const fileExtension = file.name.split('.').pop();
       const fileName = `${user.uid}-${Date.now()}.${fileExtension}`;
 
+      // Upload logo to Firebase Storage
       const storageRef = ref(storage, `startup-logos/${fileName}`);
       const uploadResult = await uploadBytes(storageRef, file);
       const logoUrl = await getDownloadURL(uploadResult.ref);
 
-      // Get next Sunday for scheduling
-      const nextSunday = getNextSundayDate();
-      
+      // Calculate next week's launch date
+      const now = new Date();
+      const nextWeekStart = new Date(now);
+      nextWeekStart.setDate(now.getDate() + (7 - now.getDay()));
+      nextWeekStart.setHours(0, 0, 0, 0);
+
+      // Save startup data to Firestore
       const startupRef = doc(db, 'startups', user.uid);
       const timestamp = serverTimestamp();
       const startupData = {
@@ -130,25 +124,23 @@ export function ProfilePage() {
         logoUrl,
         userId: user.uid,
         createdAt: timestamp,
-        status: 'scheduled', // Changed from 'pending' to 'scheduled'
-        category: data.category,
+        status: 'pending',
         updatedAt: timestamp,
-        scheduledFor: nextSunday.toISOString(), // Add scheduled launch date
-        listingType: 'regular' // Default listing type
+        scheduledFor: Timestamp.fromDate(nextWeekStart) // Schedule for next week
       };
 
       await setDoc(startupRef, startupData);
 
+      // Set submitted startup data
       setSubmittedStartup({
         ...startupData,
         submittedAt: new Date(),
-        status: 'scheduled',
-        scheduledFor: nextSunday.toISOString()
+        status: 'pending'
       });
 
       toast({
         title: 'Success!',
-        description: `Your startup has been scheduled for launch on ${nextSunday.toLocaleDateString()}`,
+        description: 'Your startup has been submitted for review and will be scheduled for next week\'s launch.',
       });
 
       reset();
@@ -225,24 +217,14 @@ export function ProfilePage() {
                   <p className="text-sm text-muted-foreground mt-2">
                     Social Handle: {submittedStartup.socialHandle}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Category: {submittedStartup.category}
-                  </p>
                 </div>
               </div>
               <div className="bg-muted/50 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">
                   Status: <span className="font-medium text-primary capitalize">{submittedStartup.status}</span>
                 </p>
-                {submittedStartup.scheduledFor && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Scheduled Launch: {new Date(submittedStartup.scheduledFor).toLocaleDateString()}
-                  </p>
-                )}
                 <p className="text-sm mt-2">
-                  {submittedStartup.status === 'scheduled' 
-                    ? 'Your startup is scheduled for the next weekly launch!' 
-                    : 'We\'ll review your submission and get back to you soon.'}
+                  We'll review your submission and get back to you soon.
                 </p>
               </div>
             </CardContent>
@@ -259,7 +241,7 @@ export function ProfilePage() {
             <DialogHeader>
               <DialogTitle>Submit Your Startup</DialogTitle>
               <DialogDescription>
-                Fill out the form below to submit your startup for the next weekly launch.
+                Fill out the form below to submit your startup for review.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-4">
@@ -289,18 +271,6 @@ export function ProfilePage() {
                 />
                 {errors.url && (
                   <p className="text-sm text-destructive">{errors.url.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Input
-                  id="category"
-                  {...register('category', { required: 'Category is required' })}
-                  placeholder="e.g., SaaS, AI, Marketing, etc."
-                />
-                {errors.category && (
-                  <p className="text-sm text-destructive">{errors.category.message}</p>
                 )}
               </div>
 
