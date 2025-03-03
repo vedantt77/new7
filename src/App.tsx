@@ -20,6 +20,7 @@ const LoginPage = lazy(() => import('@/pages/LoginPage').then(module => ({ defau
 const SignupPage = lazy(() => import('@/pages/SignupPage').then(module => ({ default: module.SignupPage })));
 const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage').then(module => ({ default: module.ForgotPasswordPage })));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage').then(module => ({ default: module.ProfilePage })));
+const AdminDashboard = lazy(() => import('@/pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 
 // Prefetch routes
 const prefetchRoutes = () => {
@@ -32,7 +33,8 @@ const prefetchRoutes = () => {
     () => import('@/pages/LoginPage'),
     () => import('@/pages/SignupPage'),
     () => import('@/pages/ForgotPasswordPage'),
-    () => import('@/pages/ProfilePage')
+    () => import('@/pages/ProfilePage'),
+    () => import('@/pages/AdminDashboard')
   ];
 
   routes.forEach(route => {
@@ -147,6 +149,15 @@ function AppContent() {
                 <PageTransition>
                   <Suspense fallback={<LoadingFallback />}>
                     <ProfilePage />
+                  </Suspense>
+                </PageTransition>
+              </PrivateRoute>
+            } />
+            <Route path="/admin" element={
+              <PrivateRoute>
+                <PageTransition>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <AdminDashboard />
                   </Suspense>
                 </PageTransition>
               </PrivateRoute>
