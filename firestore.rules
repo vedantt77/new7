@@ -1,10 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /startups/{userId} {
+    match /startups/{startupId} {
+      // Allow public read access to all startups
       allow read: if true;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+      
+      // Only allow write operations for authenticated users
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid == startupId;
       allow delete: if false;
+    }
+
+    // Add rules for any other collections as needed
+    match /{document=**} {
+      allow read: if true;
+      allow write: if false;
     }
   }
 }
