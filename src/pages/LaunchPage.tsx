@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LaunchListItem } from '@/components/launch/LaunchListItem';
 import { PremiumListing } from '@/components/launch/PremiumListing';
 import { AnimatedHeader } from '@/components/launch/AnimatedHeader';
-import { getLaunches, getWeeklyLaunches, getQueuedLaunches } from '@/lib/data/launches';
+import { getLaunches, getWeeklyLaunches } from '@/lib/data/launches';
 import { WeeklyCountdownTimer } from '@/components/WeeklyCountdownTimer';
 import { Launch } from '@/lib/types/launch';
 
@@ -87,32 +87,23 @@ export function LaunchPage() {
 
   // Update rotations based on current time
   useEffect(() => {
-    const fetchLaunches = async () => {
-      const allLaunches = await getQueuedLaunches();
-      const weeklyLaunches = allLaunches.filter(launch => {
-        const launchDate = new Date(launch.launchDate);
-        const now = new Date();
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay());
-        startOfWeek.setHours(0, 0, 0, 0);
+    const updateLaunches = () => {
+      try {
+        // Use the static data instead of queued launches for now
+        const weeklyLaunches = getWeeklyLaunches();
+        const regularLaunches = getLaunches().filter(launch => !launch.listingType || launch.listingType === 'regular');
+        const boostedLaunches = getLaunches().filter(launch => launch.listingType === 'boosted');
         
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-        
-        return launchDate >= startOfWeek && launchDate <= endOfWeek;
-      });
-
-      const regularLaunches = allLaunches.filter(launch => !launch.listingType || launch.listingType === 'regular');
-      const boostedLaunches = allLaunches.filter(launch => launch.listingType === 'boosted');
-      
-      setRotatedWeeklyLaunches(rotateArrayByIndex(weeklyLaunches, getCurrentRotationIndex(weeklyLaunches.length)));
-      setRotatedRegularLaunches(rotateArrayByIndex(regularLaunches, getCurrentRotationIndex(regularLaunches.length)));
-      setRotatedBoostedLaunches(rotateArrayByIndex(boostedLaunches, getCurrentRotationIndex(boostedLaunches.length)));
+        setRotatedWeeklyLaunches(rotateArrayByIndex(weeklyLaunches, getCurrentRotationIndex(weeklyLaunches.length)));
+        setRotatedRegularLaunches(rotateArrayByIndex(regularLaunches, getCurrentRotationIndex(regularLaunches.length)));
+        setRotatedBoostedLaunches(rotateArrayByIndex(boostedLaunches, getCurrentRotationIndex(boostedLaunches.length)));
+      } catch (error) {
+        console.error('Error updating launches:', error);
+      }
     };
 
-    // Initial fetch
-    fetchLaunches();
+    // Initial update
+    updateLaunches();
 
     // Set up interval for rotation
     const now = Date.now();
@@ -120,13 +111,13 @@ export function LaunchPage() {
     const timeUntilNextRotation = nextRotation - now;
 
     const initialTimeout = setTimeout(() => {
-      fetchLaunches();
-      const interval = setInterval(fetchLaunches, ROTATION_INTERVAL);
+      updateLaunches();
+      const interval = setInterval(updateLaunches, ROTATION_INTERVAL);
       return () => clearInterval(interval);
     }, timeUntilNextRotation);
 
     return () => clearTimeout(initialTimeout);
-  }, []); // Empty dependency array since we're managing updates internally
+  }, []); 
 
   return (
     <div className="min-h-screen">
